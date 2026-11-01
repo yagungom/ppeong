@@ -48,7 +48,7 @@ export class Engine {
 
   reset() {
     this.parts.length = 0; this.texts.length = 0; this.rings.length = 0;
-    this.results = []; this.points = 0; this.streak = 0; this.bestStreak = 0; this.corners = 0; this.maxSpeed = 0;
+    this.results = []; this.log = ''; this.points = 0; this.streak = 0; this.bestStreak = 0; this.corners = 0; this.maxSpeed = 0;
     this.shotIdx = 0; this.phase = 'aim'; this.phaseT = 0; this.aim = null; this.aimProg = { left: 0, center: 0, right: 0 };
     this.ball = null; this.shot = null; this.lastKick = null; this.netHit = null;
     this.banner = null; this.countT = 0; this.startProg = 0; this.retryProg = 0; this.shake = 0;
@@ -336,6 +336,7 @@ export class Engine {
     }
     if (!s.demo) {
       this.results.push(s.outcome);
+      this.log += s.outcome === 'goal' ? (s.height === 'high' && s.aim !== 'center' ? 'C' : 'G') : s.outcome === 'save' ? 'S' : 'O'; // 서버 점수 검증용
       this.phase = 'result'; this.phaseT = 0;
       this.emit('shot', s);
     }
@@ -353,7 +354,7 @@ export class Engine {
     this.sound.fanfare();
     this.emit('state', 'over');
     this.emit('gameOver', {
-      score: this.points, goals: this.goals, shots: RULES.SHOTS, results: [...this.results],
+      score: this.points, goals: this.goals, shots: RULES.SHOTS, results: [...this.results], log: this.log,
       bestStreak: this.bestStreak, corners: this.corners, maxSpeed: this.maxSpeed,
       difficulty: this.difficulty, input: this.input?.kind || 'touch',
     });

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; worker-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' https://*.supabase.co; worker-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#1b1640">
   <meta name="mobile-web-app-capable" content="yes">
@@ -50,7 +50,7 @@
             </div>
             <button type="submit" class="btn btn-primary btn-big" id="btn-start">게임 시작!</button>
             <div class="row">
-              <button type="button" class="btn btn-sm" id="btn-rank">🏆 기록</button>
+              <button type="button" class="btn btn-sm" id="btn-rank">🏆 랭킹</button>
               <button type="button" class="btn btn-sm" id="btn-help">❓ 하는 법</button>
               <button type="button" class="btn btn-sm" id="btn-settings">⚙️ 설정</button>
             </div>
@@ -139,6 +139,7 @@
           <div class="card board-card">
             <div class="board-tabs">
               <div class="tabs" id="res-period"></div>
+              <div class="tabs small" id="res-scope"></div>
             </div>
             <div id="res-board" class="board"></div>
           </div>
@@ -151,8 +152,8 @@
         <div class="card rank-card">
           <div class="rank-top">
             <button type="button" class="btn btn-sm" id="rank-back">← 뒤로</button>
-            <h2>🏆 우리 기기 기록</h2>
-            <div></div>
+            <h2>🏆 랭킹</h2>
+            <div class="tabs small" id="rank-scope"></div>
           </div>
           <div class="board-tabs">
             <div class="tabs" id="rank-input"></div>
@@ -173,7 +174,7 @@
             <li><b>🎈 방향 고르기</b> 골대 아래 왼쪽·가운데·오른쪽 풍선 중 하나에 손을 잠깐 대요. 내 왼손 쪽이 화면 왼쪽이에요 (거울처럼).</li>
             <li><b>⚽ 뻥!</b> 공 앞에서 한 발을 앞으로 힘차게 차요. 살살 차면 땅볼, 세게 차면 높이 날아가요. 위쪽 구석에 넣으면 보너스!</li>
             <li><b>🧤 키퍼</b> 키퍼는 아무 데로나 뛰어요. 같은 쪽으로 뛰어도 높은 공은 잘 못 막아요. 일반 모드에서는 너무 세게 차면 크로스바를 넘어가요.</li>
-            <li><b>🏆 점수</b> 한 판에 슛 10번. 골 100점, 구석 슛 +50점, 연속으로 넣으면 2연속부터 +20점씩 더.</li>
+            <li><b>🏆 점수</b> 한 판에 슛 10번. 골 100점, 구석 슛 +50점, 연속으로 넣으면 2연속부터 +20점씩 더. 온라인 랭킹은 카메라·폰 모드, 일반·아기 모드가 따로예요.</li>
             <li><b>📱 폰 모드</b> 풍선을 톡 눌러 방향을 고르고, 공을 손가락으로 위로 휙 밀어요. 빠르게 밀수록 높이 날아가요. PC에서는 ← ↑ → 와 1·2·3 키로도 돼요.</li>
           </ol>
           <button type="button" class="btn btn-primary" id="help-back">알았어요!</button>
@@ -190,11 +191,12 @@
           <div class="set-row"><label for="set-quality">인식 화질</label>
             <select id="set-quality"><option value="best">최고 (가장 정확, 최신 폰)</option><option value="high">고화질</option><option value="normal">표준</option><option value="low">절전</option></select></div>
           <div class="set-row"><label for="set-debug">성능 정보 표시 <small>(발 속도 보기)</small></label><input type="checkbox" id="set-debug" class="toggle"></div>
+          <div class="set-row"><span>온라인 랭킹</span><b id="set-online"></b></div>
           <div class="row">
             <button type="button" class="btn btn-sm" id="btn-clear">🗑️ 이 기기 기록 지우기</button>
             <button type="button" class="btn btn-primary" id="settings-back">닫기</button>
           </div>
-          <p class="privacy small">🔒 카메라 영상: 이 기기에서만 처리, 저장·전송 없음 · 기록은 이 기기에만 저장돼요</p>
+          <p class="privacy small">🔒 카메라 영상: 이 기기에서만 처리, 저장·전송 없음 · 온라인에 올라가는 것: 팀 이름, 점수, 슛 결과 · 로그인·이메일·연락처 수집 안 함</p>
         </div>
       </section>
 

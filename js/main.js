@@ -5,7 +5,8 @@ import { Engine } from './game.js';
 import { Sound } from './audio.js';
 import { CameraVision, TouchInput } from './vision.js';
 import { validateName } from './nickname.js';
-import { addLocal, localBoard, clearLocal } from './ranking.js';
+import { addLocal, localBoard, normalizeOnline, clearLocal } from './ranking.js';
+import { online, errorText } from './api.js';
 import { renderBoard } from './chart.js';
 import * as fs from './fullscreen.js';
 
@@ -27,6 +28,7 @@ const applySettings = () => {
 let vision = null;          // CameraVision (재사용)
 let team = '';
 let lastResult = null;
+let sessionPromise = null;
 let loadCancelled = false;
 let wakeLock = null;
 
@@ -237,7 +239,13 @@ function toggleCamPicker(open) {
 $('#btn-cam-switch').addEventListener('click', () => toggleCamPicker());
 
 // ── 경기 ──
-engine.on('countdown', () => { toggleCamPicker(false); show('play'); });
+engine.on('countdown', () => {
+  toggleCamPicker(false); show('play');
+  // 온라인 랭킹: 경기 시작 때 서버에서 1회용 세션을 받아 둠 (서버 시계로 경기 시간 확인)
+  sessionPromise = online.enabled && engine.input
+    ? online.startSession(engine.difficulty, team, engine.input.kind).then((id) => ({ id }), (err) => ({ err }))
+    : null;
+});
 engine.on('gameOver', (res) => showResult(res));
 engine.on('retry', () => retry());
 const bubble = $('#retry-bubble');
@@ -252,10 +260,10 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ── 결과 ──
-const resState = { period: 'day' };
+const resState = { period: 'day', scope: 'local' };
 const diffLabel = (d) => (d === 'baby' ? '🍼 아기 모드' : '🙂 일반');
 
-function showResult(res) {
+async function showResult(res) {
   lastResult = { ...res, team };
   addLocal({ team, mode: res.difficulty, score: res.score, goals: res.goals, shots: res.shots, corners: res.corners, bestStreak: res.bestStreak, input: res.input });
   const saves = res.results.filter((r) => r === 'save').length;
@@ -266,10 +274,26 @@ function showResult(res) {
   $('#res-corner').textContent = res.corners ? `${res.corners}개 (+${formatNum(res.corners * RULES.CORNER_BONUS)})` : '-';
   $('#res-streak').textContent = res.bestStreak >= 2 ? `${res.bestStreak}연속` : '-';
   $('#res-save').textContent = saves ? `${saves}번` : '없음 👏';
-  $('#res-online').textContent = res.goals === res.shots ? '🏆 퍼펙트! 전부 넣었어요!' : '💾 이 기기에 기록했어요';
+  const note = $('#res-online'); note.className = 'res-online';
+  const perfect = res.goals === res.shots ? '🏆 퍼펙트! ' : '';
   resState.period = 'day';
+  resState.scope = online.enabled ? 'online' : 'local';
   show('result');
   setupRetryBubble(res.input);
+
+  if (!online.enabled) note.textContent = `${perfect}💾 이 기기에 기록했어요`;
+  else {
+    note.textContent = '🌐 온라인 랭킹에 등록하는 중…';
+    try {
+      const s = await sessionPromise;
+      if (!s || s.err) throw s?.err || new Error('offline');
+      const r = await online.submit(s.id, res);
+      if (r?.ok) { note.textContent = `${perfect}🎉 온라인 등록! 오늘 ${formatNum(r.day_total)}팀 중 ${formatNum(r.day_rank)}등`; note.classList.add('good'); }
+      else note.textContent = `💾 이 기기에만 기록했어요 · ${errorText(r?.reason)}`;
+    } catch (e) {
+      note.textContent = `💾 이 기기에만 기록했어요 · ${errorText(e?.code || e?.message)}`;
+    }
+  }
   renderResultBoard();
 }
 
@@ -290,7 +314,8 @@ bubble.addEventListener('click', () => retry());
 function renderResultBoard() {
   const r = lastResult; if (!r) return;
   makeTabs($('#res-period'), PERIODS, resState.period, (v) => { resState.period = v; renderResultBoard(); });
-  loadBoard($('#res-board'), { mode: r.difficulty, input: r.input, period: resState.period, myScore: r.score, myTeam: r.team });
+  makeTabs($('#res-scope'), scopes(), resState.scope, (v) => { resState.scope = v; renderResultBoard(); });
+  loadBoard($('#res-board'), { scope: resState.scope, mode: r.difficulty, input: r.input, period: resState.period, myScore: r.score, myTeam: r.team });
 }
 
 function retry() {
@@ -303,6 +328,10 @@ $('#btn-home').addEventListener('click', () => goTitle());
 // ── 기록 ──
 const PERIODS = [{ value: 'day', label: '오늘' }, { value: 'week', label: '이번 주' }, { value: 'month', label: '이번 달' }];
 const INPUTS = [{ value: 'camera', label: '📺 카메라' }, { value: 'touch', label: '📱 폰' }];
+const scopes = () => [
+  { value: 'online', label: online.enabled ? '🌐 전체' : '🌐 전체 (준비 중)', disabled: !online.enabled },
+  { value: 'local', label: '🏠 우리 기기' },
+];
 const MODES = Object.entries(DIFFICULTY).map(([value, d]) => ({ value, label: value === 'baby' ? `🍼 ${d.label}` : `🙂 ${d.label}` }));
 
 function makeTabs(box, items, current, onChange) {
@@ -310,22 +339,31 @@ function makeTabs(box, items, current, onChange) {
   box.setAttribute('role', 'tablist');
   for (const it of items) {
     box.append(el('button', {
-      type: 'button', class: 'tab', role: 'tab', 'aria-selected': String(it.value === current), text: it.label,
-      onclick: () => { if (it.value !== current) onChange(it.value); },
+      type: 'button', class: 'tab', role: 'tab', 'aria-selected': String(it.value === current), disabled: it.disabled || null, text: it.label,
+      onclick: () => { if (!it.disabled && it.value !== current) onChange(it.value); },
     }));
   }
 }
-function loadBoard(box, { mode, input = 'camera', period, myScore = null, myTeam = null }) {
-  const board = localBoard(mode, period, myScore, input);
+let boardToken = 0;
+async function loadBoard(box, { scope = 'local', mode, input = 'camera', period, myScore = null, myTeam = null }) {
+  const token = ++boardToken;
+  box.replaceChildren(el('div', { class: 'board-note', text: '불러오는 중…' }));
+  let board;
+  if (scope === 'online') {
+    try { board = normalizeOnline(await online.board(mode, period, myScore, input)); }
+    catch (e) { if (token === boardToken) box.replaceChildren(el('div', { class: 'board-note', text: errorText(e?.code || e?.message) })); return; }
+  } else board = localBoard(mode, period, myScore, input);
+  if (token !== boardToken) return;
   const tags = [input === 'touch' ? '폰 모드' : null, mode === 'baby' ? '아기 모드' : null].filter(Boolean);
-  renderBoard(box, board, { myScore, myTeam, scopeLabel: `우리 기기${tags.length ? `(${tags.join('·')})` : ''}` });
+  renderBoard(box, board, { myScore, myTeam, scopeLabel: `${scope === 'online' ? '전체' : '우리 기기'}${tags.length ? `(${tags.join('·')})` : ''}` });
 }
 
-const rankState = { input: 'camera', mode: 'normal', period: 'day', from: 'title' };
+const rankState = { input: 'camera', mode: 'normal', period: 'day', scope: 'local', from: 'title' };
 function openRanking(from) {
   rankState.from = from;
   rankState.input = lastResult?.input || settings.play;
   rankState.mode = lastResult?.difficulty || settings.difficulty;
+  rankState.scope = online.enabled ? 'online' : 'local';
   show('ranking');
   renderRanking();
 }
@@ -333,8 +371,9 @@ function renderRanking() {
   makeTabs($('#rank-input'), INPUTS, rankState.input, (v) => { rankState.input = v; renderRanking(); });
   makeTabs($('#rank-mode'), MODES, rankState.mode, (v) => { rankState.mode = v; renderRanking(); });
   makeTabs($('#rank-period'), PERIODS, rankState.period, (v) => { rankState.period = v; renderRanking(); });
+  makeTabs($('#rank-scope'), scopes(), rankState.scope, (v) => { rankState.scope = v; renderRanking(); });
   const mine = lastResult && lastResult.difficulty === rankState.mode && lastResult.input === rankState.input ? lastResult : null;
-  loadBoard($('#rank-board'), { mode: rankState.mode, input: rankState.input, period: rankState.period, myScore: mine?.score ?? null, myTeam: mine?.team || team || null });
+  loadBoard($('#rank-board'), { scope: rankState.scope, mode: rankState.mode, input: rankState.input, period: rankState.period, myScore: mine?.score ?? null, myTeam: mine?.team || team || null });
 }
 $('#btn-rank').addEventListener('click', () => openRanking('title'));
 $('#rank-back').addEventListener('click', () => show(rankState.from === 'result' ? 'result' : 'title'));
@@ -348,6 +387,7 @@ async function openSettings() {
   $('#set-sfx').checked = settings.sfx;
   $('#set-quality').value = settings.quality;
   $('#set-debug').checked = settings.debug;
+  $('#set-online').textContent = online.enabled ? '켜짐 ✅' : '꺼짐 (config.js 설정 필요)';
   const sel = $('#set-camera');
   sel.replaceChildren(el('option', { value: '', text: settings.facing === 'user' ? '자동 (전면)' : '자동 (후면)' }));
   const cams = (await CameraVision.listCameras()).filter((c) => c.deviceId);

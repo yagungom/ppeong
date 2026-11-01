@@ -3,6 +3,12 @@
 // ─────────────────────────────────────────────────────────────
 
 export const CONFIG = Object.freeze({
+  // 온라인 랭킹 (Supabase) — 와르르 캐치와 같은 프로젝트. 둘 다 비워두면 "우리 기기 기록"만 동작합니다.
+  // 키는 publishable(anon) 키: 원래 브라우저에 공개되는 값이고, 보안은 서버 쪽 RLS·검증 함수가 담당합니다.
+  // ⚠ service_role / secret 키는 절대 넣지 마세요. 처음 한 번 supabase/schema.sql 을 SQL Editor 에서 실행해야 켜집니다.
+  SUPABASE_URL: 'https://hofykldrsauhmwepehnf.supabase.co',
+  SUPABASE_KEY: 'sb_publishable_JzCBAjrAhOgG9ZOqKhwz4Q_92R80GrW',
+
   // 사람 분리(배경 합성) 모델과 자세 인식 모델. 이 폴더에 같이 들어 있어 외부 서버를 부르지 않습니다.
   MODEL: { path: 'models/selfie_segmentation.tflite', kind: 'person' },
   POSE_MODELS: { full: 'models/pose_landmarker_full.task', lite: 'models/pose_landmarker_lite.task' },
