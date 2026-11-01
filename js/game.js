@@ -86,7 +86,7 @@ export class Engine {
   }
 
   showTitle() { this.reset(); this.state = 'title'; }
-  enterLobby() { this.reset(); this.state = 'lobby'; this.emit('state', 'lobby'); }
+  enterLobby() { this.reset(); this.state = 'lobby'; this.input?.reselect?.(); this.emit('state', 'lobby'); }
   startCountdown() {
     if (this.state !== 'lobby') return;
     this.reset(); this.state = 'countdown'; this.countT = 3.999; this._lastBeep = 4;
@@ -200,7 +200,8 @@ export class Engine {
   _startAim() {
     this.phase = 'aim'; this.phaseT = 0; this.aim = null; this.aimProg = { left: 0, center: 0, right: 0 };
     this.ball = null; this.shot = null; this.netHit = null; this.keeper.dive = null;
-    this.kicker.arm(false);
+    this.kicker.arm(false); this.kicker.reset();
+    this.input?.reselect?.(); // 차례마다 가운데에 선 사람이 차는 사람
     const nth = ['첫', '두', '세', '네', '다섯', '여섯', '일곱', '여덟', '아홉', '열'][this.shotIdx] || `${this.shotIdx + 1}`;
     this.banner = { text: `${nth} 번째 슛!`, sub: this.shotIdx === RULES.SHOTS - 1 ? '마지막 슛이에요' : null, t: 0, max: 1.2 };
   }
@@ -686,7 +687,7 @@ export class Engine {
   _drawPrompt(c, now) {
     let msg = null;
     const cam = this.input?.kind === 'camera';
-    if (this.phase === 'aim') msg = cam ? '어디로 찰까? 손으로 풍선을 골라요!' : '어디로 찰까? 풍선을 눌러요!';
+    if (this.phase === 'aim') msg = !cam ? '어디로 찰까? 풍선을 눌러요!' : this.input.crowd > 1 && this.phaseT < 2.5 ? '이번엔 가운데 선 사람 차례! 손으로 풍선을 골라요' : '어디로 찰까? 손으로 풍선을 골라요!';
     else if (this.phase === 'kick') {
       const late = this.phaseT > 6;
       if (cam) {
@@ -736,6 +737,7 @@ export class Engine {
       else if (inp.close?.on && !inp.hands.length) msg = '카메라에 너무 가까워요! 뒤로 가 주세요';
       else if (inp.poseOk && !feet) msg = '발이 안 보여요! 폰을 낮게 두거나 뒤로 가 주세요';
       else if (inp.poseOk && !inp.hands.length) msg = '손이 보이게 팔을 들어 주세요';
+      else if (inp.crowd > 1) msg = '차는 사람 한 명만 보여요! 차례가 되면 가운데에 서요';
       else msg = '준비 완료! 손을 들어 노란 풍선을 터치하면 시작';
     } else msg = '풍선을 눌러서 시작! (폰 모드)';
     // 아래 모서리 버튼(카메라 바꾸기·바로 시작)과 겹치지 않게 조금 위에
@@ -778,7 +780,7 @@ export class Engine {
 
   _drawDebug(c) {
     const inp = this.input, k = this.kicker, lk = this.lastKick;
-    const s = `화면 ${Math.round(this._fpsEma || 0)}fps · 인식 ${inp.fps.toFixed(0)}fps · 자세 ${inp.poseMs.toFixed(0)}ms · ${inp.people}명 · 발 속도 ${k.live.toFixed(1)} 들림 ${k.liveLift.toFixed(2)}${lk?.speed != null ? ` · 마지막 슛 ${lk.speed.toFixed(1)}→${Math.round(lk.power * 100)}%` : ''}`;
+    const s = `화면 ${Math.round(this._fpsEma || 0)}fps · 인식 ${inp.fps.toFixed(0)}fps · 자세 ${inp.poseMs.toFixed(0)}ms · ${inp.people}/${inp.crowd}명 · 발 속도 ${k.live.toFixed(1)} 들림 ${k.liveLift.toFixed(2)}${lk?.speed != null ? ` · 마지막 슛 ${lk.speed.toFixed(1)}→${Math.round(lk.power * 100)}%` : ''}`;
     c.fillStyle = 'rgba(0,0,0,0.55)'; c.fillRect(this.W / 2 - 470, 124, 940, 28);
     this._text(c, s, this.W / 2, 138, 17, '#ffffff', 'center', 600);
   }

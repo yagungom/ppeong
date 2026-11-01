@@ -6,7 +6,8 @@ export const CONFIG = Object.freeze({
   // 사람 분리(배경 합성) 모델과 자세 인식 모델. 이 폴더에 같이 들어 있어 외부 서버를 부르지 않습니다.
   MODEL: { path: 'models/selfie_segmentation.tflite', kind: 'person' },
   POSE_MODELS: { full: 'models/pose_landmarker_full.task', lite: 'models/pose_landmarker_lite.task' },
-  MAX_PEOPLE: 4,
+  MAX_PEOPLE: 4,            // 이만큼 찾아본 뒤
+  SINGLE_PLAYER: true,      // 차는 사람 한 명만 골라서 화면에 보여 주고 판정 (가운데에 선 사람, 차례마다 다시 고름)
   WASM_PATH: 'vendor/mediapipe/wasm',
 
   // 카메라 속 사람을 화면에 그리는 크기·위치

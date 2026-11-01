@@ -59,7 +59,7 @@ export class CameraVision {
       W: this.W, H: this.H, segW: this.SW, segH: this.SH, poseW: this.PW, poseH: this.PH,
       bundleUrl: abs('vendor/mediapipe/vision_bundle.mjs'), wasmBase: abs(CONFIG.WASM_PATH).replace(/\/$/, ''),
       segModel: abs(CONFIG.MODEL.path), poseModel: abs(CONFIG.POSE_MODELS[this.poseKind]),
-      multiclass: CONFIG.MODEL.kind === 'multiclass', maxPeople: CONFIG.MAX_PEOPLE,
+      multiclass: CONFIG.MODEL.kind === 'multiclass', maxPeople: CONFIG.MAX_PEOPLE, single: !!CONFIG.SINGLE_PLAYER,
     };
   }
 
@@ -90,6 +90,9 @@ export class CameraVision {
     });
   }
 
+  // 차는 사람 다시 고르기 (가운데에 선 사람으로) — 차례가 바뀔 때 게임이 부름
+  reselect() { if (this.worker) this.worker.postMessage({ type: 'reselect' }); else this.core?.reselect(); }
+
   _setInfo(info) { this.delegate = info.delegate; this.poseDelegate = info.poseDelegate; this.poseOk = info.poseOk; }
   _killWorker() { try { this.worker?.terminate(); } catch { /* noop */ } this.worker = null; this.busy = false; }
 
@@ -116,7 +119,7 @@ export class CameraVision {
     this.running = false;
     if (this.stream) { this.stream.getTracks().forEach((t) => t.stop()); this.stream = null; }
     this.video.srcObject = null;
-    this.coverage = 0; this.hasFrame = false; this.hands = []; this.bodies = []; this.people = 0; this.lastRgba = null; this.fps = 0;
+    this.coverage = 0; this.hasFrame = false; this.hands = []; this.bodies = []; this.people = 0; this.crowd = 0; this.lastRgba = null; this.fps = 0;
     this.close = { on: false, x: 0, y: 0, ratio: 0 };
   }
 
@@ -156,7 +159,7 @@ export class CameraVision {
       if (!this.live) this._composite(this.frameCv);
       this.lastRgba = r.rgba; this.coverage = r.coverage; this.colProfile = r.cols; this.hasFrame = true;
     }
-    this.hands = r.hands || []; this.people = r.people || 0;
+    this.hands = r.hands || []; this.people = r.people || 0; this.crowd = r.crowd || 0;
     if (r.poseSeq != null && r.poseSeq !== this.poseSeq) {
       this.poseSeq = r.poseSeq; this.bodies = r.bodies || [];
       try { this.onPose?.(this.bodies, this._capT); } catch (e) { console.warn(e); }

@@ -13,6 +13,8 @@ self.onmessage = async (e) => {
     } catch (err) {
       self.postMessage({ type: 'error', message: String(err?.message || err) });
     }
+  } else if (m.type === 'reselect' && core) {
+    core.reselect();
   } else if (m.type === 'frame' && core) {
     let r;
     try { r = core.process(m.bitmap); } catch (err) { r = { error: String(err?.message || err) }; }

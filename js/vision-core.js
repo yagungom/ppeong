@@ -35,6 +35,8 @@ export class VisionCore {
     this.poseEvery = 1; this.frame = 0; this.lastTs = -1; this.lastPoseTs = -1;
     this.segMs = 0; this.poseMs = 0;
     this.close = { on: false, x: 0, y: 0, ratio: 0 };
+    // 한 명만 모드(single): 여러 명이 보여도 '차는 사람' 한 명만 골라서 화면·판정에 씀
+    this.crowd = 0; this.target = null; this.lostN = 0;
     this.closePose = null;
   }
 
@@ -79,14 +81,16 @@ export class VisionCore {
     } catch (e) { console.warn('segment error', e); }
     this.segMs = this.segMs * 0.85 + (performance.now() - t1) * 0.15;
     return {
-      ...out, hands: this.hands, bodies: this.bodies, poseSeq: this.poseSeq, people: this.people, close: this.close,
+      ...out, hands: this.hands, bodies: this.bodies, poseSeq: this.poseSeq, people: this.people, crowd: this.crowd, close: this.close,
       segMs: this.segMs, poseMs: this.poseMs, poseEvery: this.poseEvery, poseDbg: this.poseDbg,
     };
   }
 
   _onPose(res) {
     const { W, H } = this;
-    const all = res.landmarks || [];
+    let all = res.landmarks || [];
+    this.crowd = all.length;
+    if (this.single) { all = this._pickOne(all); if (!all) return; } // null = 잠깐 놓침 → 이전 모습 그대로 유지
     // 카메라 바로 앞(얼굴이 아주 크게 보임) → 사람 영역에서 빼서 반투명 + '뒤로' 안내
     const lms = [], near = [], dbg = [];
     for (const lm of all) {
@@ -119,7 +123,42 @@ export class VisionCore {
     }
     this.hands = next; this.people = all.length;
     this.bodies = all.map((lm) => this._body(lm)); this.poseSeq++;
-    this._drawSilhouettes(lms);
+    this._drawSilhouettes(this.single ? all : lms); // 한 명만 모드: 가까이 붙어도 그 사람은 계속 보이게
+  }
+
+  // 다음 프레임에 '차는 사람'을 새로 고름 (차례가 바뀔 때)
+  reselect() { this.target = null; this.lostN = 0; }
+
+  // 차는 사람 한 명 고르기
+  //  - 이미 고른 사람이 있으면: 엉덩이 위치가 가장 가까운 사람을 계속 따라감 (옆으로 걸어가도 유지)
+  //  - 잠깐 안 보이면(10번 이내) 다른 사람으로 바꾸지 않고 기다림
+  //  - 처음이거나 오래 놓치면: 화면 가운데에 가장 가까운 사람
+  _pickOne(all) {
+    const { W, H } = this;
+    const hip = (lm) => ({ x: (lm[23].x + lm[24].x) / 2 * W, y: (lm[23].y + lm[24].y) / 2 * H });
+    const size = (lm) => Math.hypot((lm[11].x - lm[12].x) * W, (lm[11].y - lm[12].y) * H) + Math.hypot((lm[11].x - lm[23].x) * W, (lm[11].y - lm[23].y) * H);
+    let best = null;
+    if (this.target && all.length) {
+      // 한 번 인식할 때 움직일 수 있는 거리 안에 있고, 몸 크기도 비슷한 사람만 '같은 사람' (아이↔어른 바뀜 방지)
+      const T = this.target, lim = Math.max(W * 0.06, T.size * 0.4);
+      let bd = Infinity;
+      for (const lm of all) {
+        const h = hip(lm), d = Math.hypot(h.x - T.x, h.y - T.y), r = size(lm) / T.size;
+        if (d < bd && d < lim && r > 0.75 && r < 1.33) { bd = d; best = lm; }
+      }
+    }
+    if (!best) {
+      if (this.target && ++this.lostN <= 10) return null;
+      if (!all.length) { this.target = null; return []; }
+      let bs = -Infinity;
+      for (const lm of all) {
+        const h = hip(lm), score = -Math.abs(h.x - W / 2) / W + Math.min(size(lm) / H, 0.6) * 0.25; // 가운데 우선, 너무 작게(멀리) 보이면 조금 덜
+        if (score > bs) { bs = score; best = lm; }
+      }
+    }
+    this.lostN = 0;
+    const h = hip(best); this.target = { x: h.x, y: h.y, size: size(best) };
+    return [best];
   }
 
   // 발차기 판정용: 사람마다 엉덩이 가운데, 다리 길이(엉덩이~발목), 두 발 위치
@@ -185,7 +224,8 @@ export class VisionCore {
     const m = this.mask, n = m.length, SW = this.SW, SH = this.SH;
     const rgba = new Uint8ClampedArray(n * 4);
     const cols = new Float32Array(32), nc = 32;
-    const sil = this.sil, ghost = !!this.poser; // 자세 인식이 있을 때만 '가까운 덩어리' 반투명 처리
+    const solo = this.single && !!this.poser; // 한 명만 모드: 고른 사람 영역 밖은 안 보이게
+    const sil = this.sil, ghost = !!this.poser && !solo; // 자세 인식이 있을 때만 '가까운 덩어리' 반투명 처리
     let cov = 0, closeN = 0, cx = 0, cy = 0;
     for (let i = 0; i < n; i++) {
       let v = invert ? 1 - f[i] : f[i];
@@ -199,11 +239,12 @@ export class VisionCore {
       v = m[i] * 0.3 + v * 0.7; // 깜빡임 줄이기
       m[i] = v;
       let a = clamp((v - 0.3) / 0.4, 0, 1);
+      if (solo && !inPerson) a = 0;
       if (ghost && !inPerson && v > 0.5) {                       // 손이 안 보일 만큼 가까운 사람 → 반투명
         a *= 0.4; closeN++; cx += i % SW; cy += (i / SW) | 0;
       }
       const k = i * 4; rgba[k] = rgba[k + 1] = rgba[k + 2] = 255; rgba[k + 3] = a * 255;
-      if (v > 0.5) { cov++; cols[Math.floor((i % SW) / SW * nc)]++; }
+      if (v > 0.5 && (!solo || inPerson)) { cov++; cols[Math.floor((i % SW) / SW * nc)]++; }
     }
     const colTotal = n / nc;
     for (let i = 0; i < nc; i++) cols[i] /= colTotal;
