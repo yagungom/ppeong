@@ -1,0 +1,16 @@
+{
+  "name": "뻥! 승부차기",
+  "short_name": "뻥승부차기",
+  "description": "카메라로 온 가족이 함께하는 승부차기 게임",
+  "lang": "ko",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#1b1640",
+  "theme_color": "#1b1640",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; worker-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#1b1640">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="뻥! 승부차기">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="카메라로 온 가족이 함께하는 승부차기 게임 — 손으로 방향, 발로 뻥!">
+  <title>뻥! 승부차기</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <div id="stage">
+    <canvas id="game" width="1280" height="720" aria-label="게임 화면"></canvas>
+
+    <div id="ui">
+      <!-- 타이틀 -->
+      <section id="scr-title" class="screen">
+        <button type="button" class="btn btn-sm fs-btn fs-title" data-fs aria-label="전체화면"></button>
+        <div class="title-wrap">
+          <div class="logo">
+            <h1><span class="l1">뻥!</span><span class="l2">승부차기</span></h1>
+            <p class="tagline">손으로 방향을 고르고<br>발로 뻥! 차서 골인</p>
+          </div>
+          <form id="start-form" class="card start-card" novalidate autocomplete="off">
+            <label for="team" class="lbl">팀 이름 <small>(실명 대신 별명으로!)</small></label>
+            <input id="team" name="team" maxlength="12" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="예: 튼튼이네 가족" enterkeyhint="go">
+            <div id="team-err" class="err" aria-live="polite"></div>
+            <div id="recent" class="chips" aria-label="최근 팀 이름"></div>
+            <div class="seg" role="radiogroup" aria-label="플레이 방식">
+              <button type="button" class="seg-btn" data-play="camera" role="radio">📺 카메라 모드<small>손으로 조준 · 발로 슛</small></button>
+              <button type="button" class="seg-btn" data-play="touch" role="radio">📱 폰 모드<small>톡 누르고 휙 밀기</small></button>
+            </div>
+            <div class="seg seg-sm" id="facing-row" role="radiogroup" aria-label="카메라">
+              <button type="button" class="seg-btn" data-facing="environment" role="radio">📷 후면 카메라</button>
+              <button type="button" class="seg-btn" data-facing="user" role="radio">🤳 전면 카메라</button>
+            </div>
+            <div class="seg seg-sm" role="radiogroup" aria-label="난이도">
+              <button type="button" class="seg-btn" data-diff="normal" role="radio">🙂 일반</button>
+              <button type="button" class="seg-btn" data-diff="baby" role="radio">🍼 아기 모드 <small>쉬움</small></button>
+            </div>
+            <button type="submit" class="btn btn-primary btn-big" id="btn-start">게임 시작!</button>
+            <div class="row">
+              <button type="button" class="btn btn-sm" id="btn-rank">🏆 기록</button>
+              <button type="button" class="btn btn-sm" id="btn-help">❓ 하는 법</button>
+              <button type="button" class="btn btn-sm" id="btn-settings">⚙️ 설정</button>
+            </div>
+            <p class="privacy">🔒 카메라 영상은 이 기기 안에서만 처리돼요. 저장도 전송도 하지 않아요.</p>
+          </form>
+        </div>
+      </section>
+
+      <!-- 불러오는 중 -->
+      <section id="scr-loading" class="screen">
+        <div class="card center-card">
+          <div class="spinner" aria-hidden="true"></div>
+          <div id="loading-text" class="loading-text">준비 중…</div>
+          <button type="button" class="btn btn-sm" id="btn-cancel-load">취소</button>
+        </div>
+      </section>
+
+      <!-- 카메라 오류 -->
+      <section id="scr-camerr" class="screen">
+        <div class="card center-card">
+          <div class="big-emoji">📷</div>
+          <h2 id="camerr-title">카메라를 켤 수 없어요</h2>
+          <p id="camerr-text" class="muted"></p>
+          <div class="row">
+            <button type="button" class="btn btn-primary" id="btn-cam-retry">다시 시도</button>
+            <button type="button" class="btn" id="btn-touch">👆 터치로 하기</button>
+            <button type="button" class="btn" id="btn-cam-home">처음으로</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 대기실 -->
+      <section id="scr-lobby" class="screen passthrough">
+        <div class="cam-picker card" id="cam-picker" hidden>
+          <div class="cam-picker-title">카메라 고르기</div>
+          <div class="cam-list" id="cam-list"></div>
+          <p class="cam-tip">발까지 다 보이는 카메라가 좋아요. 넓게 보이는 광각을 추천해요.</p>
+        </div>
+        <div class="corner-controls left">
+          <button type="button" class="btn btn-round fs-btn" data-fs aria-label="전체화면"></button>
+          <button type="button" class="btn btn-pill btn-sm" id="btn-cam-switch" aria-expanded="false">📷 카메라 바꾸기</button>
+          <button type="button" class="btn btn-round" id="btn-lobby-home" title="처음으로" aria-label="처음으로">✕</button>
+        </div>
+        <div class="corner-controls right">
+          <button type="button" class="btn btn-primary btn-pill" id="btn-go">▶ 바로 시작</button>
+        </div>
+      </section>
+
+      <section id="scr-play" class="screen passthrough">
+        <div class="corner-controls right bottom">
+          <button type="button" class="btn btn-round fs-btn" data-fs aria-label="전체화면"></button>
+          <button type="button" class="btn btn-round" id="btn-pause" title="일시정지" aria-label="일시정지">⏸</button>
+        </div>
+      </section>
+
+      <section id="scr-pause" class="screen dim">
+        <div class="card center-card">
+          <h2>잠깐 쉬어요 ☕</h2>
+          <div class="row">
+            <button type="button" class="btn btn-primary btn-big" id="btn-resume">계속하기</button>
+            <button type="button" class="btn" id="btn-quit">그만하기</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 결과 -->
+      <section id="scr-result" class="screen dim">
+        <div class="result-grid">
+          <div class="card result-card">
+            <div class="res-title">경기 끝!</div>
+            <div class="res-team" id="res-team"></div>
+            <div class="res-stage" id="res-goals"></div>
+            <div class="res-score" id="res-score">0</div>
+            <ul class="res-break">
+              <li><span>⚽ 골</span><b id="res-goal"></b></li>
+              <li><span>🎯 구석 슛</span><b id="res-corner"></b></li>
+              <li><span>🔥 최고 연속 골</span><b id="res-streak"></b></li>
+              <li><span>✋ 선방 당함</span><b id="res-save"></b></li>
+            </ul>
+            <div class="res-online" id="res-online" aria-live="polite"></div>
+            <div class="row">
+              <button type="button" class="btn btn-primary" id="btn-retry">다시 하기</button>
+              <button type="button" class="btn" id="btn-home">처음으로</button>
+            </div>
+          </div>
+          <div class="card board-card">
+            <div class="board-tabs">
+              <div class="tabs" id="res-period"></div>
+            </div>
+            <div id="res-board" class="board"></div>
+          </div>
+        </div>
+        <div class="retry-bubble" id="retry-bubble" aria-hidden="true"><span>손으로<br>다시!</span></div>
+      </section>
+
+      <!-- 기록 -->
+      <section id="scr-ranking" class="screen dim">
+        <div class="card rank-card">
+          <div class="rank-top">
+            <button type="button" class="btn btn-sm" id="rank-back">← 뒤로</button>
+            <h2>🏆 우리 기기 기록</h2>
+            <div></div>
+          </div>
+          <div class="board-tabs">
+            <div class="tabs" id="rank-input"></div>
+            <div class="tabs" id="rank-mode"></div>
+            <div class="tabs" id="rank-period"></div>
+          </div>
+          <div id="rank-board" class="board"></div>
+        </div>
+      </section>
+
+      <!-- 하는 법 -->
+      <section id="scr-help" class="screen dim">
+        <div class="card help-card">
+          <h2>이렇게 놀아요</h2>
+          <ol class="help-list">
+            <li><b>📺 TV에 연결</b> 유선 또는 스마트뷰로 미러링해요. 폰은 가로로 <b>낮게</b> 세워 두고, <b>발까지 화면에 보이게</b> 3걸음쯤 뒤에 서요.</li>
+            <li><b>🎈 방향 고르기</b> 골대 아래 왼쪽·가운데·오른쪽 풍선 중 하나에 손을 잠깐 대요. 내 왼손 쪽이 화면 왼쪽이에요 (거울처럼).</li>
+            <li><b>⚽ 뻥!</b> 공 앞에서 한 발을 앞으로 힘차게 차요. 살살 차면 땅볼, 세게 차면 높이 날아가요. 위쪽 구석에 넣으면 보너스!</li>
+            <li><b>🧤 키퍼</b> 키퍼는 아무 데로나 뛰어요. 같은 쪽으로 뛰어도 높은 공은 잘 못 막아요. 일반 모드에서는 너무 세게 차면 크로스바를 넘어가요.</li>
+            <li><b>🏆 점수</b> 한 판에 슛 10번. 골 100점, 구석 슛 +50점, 연속으로 넣으면 2연속부터 +20점씩 더.</li>
+            <li><b>📱 폰 모드</b> 풍선을 톡 눌러 방향을 고르고, 공을 손가락으로 위로 휙 밀어요. 빠르게 밀수록 높이 날아가요. PC에서는 ← ↑ → 와 1·2·3 키로도 돼요.</li>
+          </ol>
+          <button type="button" class="btn btn-primary" id="help-back">알았어요!</button>
+        </div>
+      </section>
+
+      <!-- 설정 -->
+      <section id="scr-settings" class="screen dim">
+        <div class="card settings-card">
+          <h2>⚙️ 설정</h2>
+          <div class="set-row"><label for="set-camera">카메라</label><select id="set-camera"><option value="">자동</option></select></div>
+          <div class="set-row"><label for="set-mirror">거울처럼 좌우 반전</label><input type="checkbox" id="set-mirror" class="toggle"></div>
+          <div class="set-row"><label for="set-sfx">효과음</label><input type="checkbox" id="set-sfx" class="toggle"></div>
+          <div class="set-row"><label for="set-quality">인식 화질</label>
+            <select id="set-quality"><option value="best">최고 (가장 정확, 최신 폰)</option><option value="high">고화질</option><option value="normal">표준</option><option value="low">절전</option></select></div>
+          <div class="set-row"><label for="set-debug">성능 정보 표시 <small>(발 속도 보기)</small></label><input type="checkbox" id="set-debug" class="toggle"></div>
+          <div class="row">
+            <button type="button" class="btn btn-sm" id="btn-clear">🗑️ 이 기기 기록 지우기</button>
+            <button type="button" class="btn btn-primary" id="settings-back">닫기</button>
+          </div>
+          <p class="privacy small">🔒 카메라 영상: 이 기기에서만 처리, 저장·전송 없음 · 기록은 이 기기에만 저장돼요</p>
+        </div>
+      </section>
+
+      <!-- 전체화면 안내 (아이폰 등 버튼이 안 되는 환경) -->
+      <section id="scr-fsguide" class="screen dim">
+        <div class="card help-card">
+          <h2 id="fsguide-title">전체화면</h2>
+          <p id="fsguide-note" class="muted fs-note"></p>
+          <ol id="fsguide-steps" class="help-list"></ol>
+          <button type="button" class="btn btn-primary" id="fsguide-close">알았어요!</button>
+        </div>
+      </section>
+
+      <!-- 확인 대화상자 (alert/confirm 대신) -->
+      <section id="scr-confirm" class="screen dim">
+        <div class="card center-card">
+          <h2 id="confirm-text">정말요?</h2>
+          <div class="row">
+            <button type="button" class="btn btn-primary" id="confirm-yes">네</button>
+            <button type="button" class="btn" id="confirm-no">아니요</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div id="rotate-hint" hidden>
+    <div class="rotate-card">
+      <div class="big-emoji">📱↻</div>
+      <p>폰을 <b>가로</b>로 돌려 주세요</p>
+      <div class="rotate-btns">
+        <button type="button" class="btn btn-sm" id="rotate-dismiss">그냥 할게요</button>
+      </div>
+    </div>
+  </div>
+  <noscript>이 게임은 자바스크립트가 필요해요.</noscript>
+</body>
+</html>
