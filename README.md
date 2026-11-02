@@ -99,7 +99,7 @@ vercel.json, _headers   보안 헤더
 
 ## 7. 보안·개인정보
 
-카메라 영상은 폰 메모리 안에서만 처리하고 저장·전송하지 않습니다. 서버로 가는 건 팀 이름·점수·슛 결과뿐이고, CSP로 Supabase 외의 연결은 막아요. 로그인·이메일·연락처는 받지 않아요.
+카메라 영상은 폰 메모리 안에서만 처리하고 저장·전송하지 않습니다. 서버로 가는 건 팀 이름·점수·슛 결과뿐이고(도배 방지용 IP는 날짜별 솔트 해시로만 2일 보관, 화면 설정에도 안내), CSP로 Supabase 외의 연결은 막아요. 로그인·이메일·연락처는 받지 않아요.
 팀 이름은 실명 대신 별명, 숫자 7자리 이상 금지, 욕설 필터 (와르르 캐치와 같은 규칙).
 
 ### 관리자 작업 (Supabase SQL Editor)
@@ -116,4 +116,4 @@ update private.pk_scores set hidden = true where team_name = '문제되는이름
 - 실제 아이 발차기로 `KICK` 기준값 맞추기
 - 가족 대결 모드 (번갈아 차기), 키퍼 모드 (몸으로 막기)
 
-라이선스: MediaPipe 엔진·모델은 Apache-2.0 (`vendor/mediapipe/NOTICE.txt`, `models/NOTICE.txt`).
+라이선스: MediaPipe 엔진·모델은 Apache-2.0. 출처는 `vendor/mediapipe/NOTICE.txt`·`models/NOTICE.txt`, 라이선스 전문은 같은 폴더의 `LICENSE.txt`.

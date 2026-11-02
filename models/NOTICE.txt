@@ -6,3 +6,5 @@ selfie_segmentation.tflite / selfie_segmentation_landscape.tflite
 pose_landmarker_lite.task / pose_landmarker_full.task
 출처: MediaPipe Pose Landmarker — Apache License 2.0 (Google). 변경 없이 사용.
 (npm 패키지 2곳에 같은 파일이 들어 있는 것을 SHA-256 으로 대조해 확인)
+
+라이선스 전문: 같은 폴더의 LICENSE.txt (Apache License 2.0)
