@@ -236,8 +236,9 @@ begin
 
   v_step := greatest(private.nice_step(greatest(v_max, 1) / 16.0), 10);
 
-  select coalesce(json_agg(t order by t.rank), '[]'::json) into v_top from (
-    select row_number() over (order by sc.score desc, sc.created_at asc) as rank,
+  -- 순위 = 나보다 높은 기록 수 + 1 (같은 점수는 공동 순위, '내 순위'와 같은 기준). 같은 순위끼리는 먼저 한 기록이 위
+  select coalesce(json_agg(t order by t.rank, t.at), '[]'::json) into v_top from (
+    select rank() over (order by sc.score desc) as rank,
            sc.team_name as team, sc.score, sc.goals, sc.shots, sc.created_at as at
       from private.pk_scores sc
      where sc.mode = p_mode and sc.input = p_input and sc.created_at >= v_from and not sc.hidden
@@ -275,6 +276,27 @@ do $$ begin
     execute 'grant execute on function public.pk_submit_score(uuid, int, text) to authenticated';
     execute 'grant execute on function public.pk_get_leaderboard(text, text, int, text) to authenticated';
     execute 'revoke all on all functions in schema private from authenticated';
+  end if;
+end $$;
+
+-- ════════════════ 오래된 세션 자동 삭제 (예약 작업) ════════════════
+--  화면 안내 '도배 방지용 IP는 2일만 보관'을 지키는 장치. 매시간 2일 지난 세션(IP 해시 포함)을 지웁니다.
+--  (방문자가 없어도 실행됨. 세션을 만들 때 가끔 지우는 기존 정리는 보조로 그대로 둠)
+--  pg_cron(예약 작업 확장)을 켜고 등록합니다. 같은 이름으로 다시 실행하면 덮어써서 중복되지 않아요.
+--  pg_cron 을 켤 수 없으면 알림만 남기고 넘어갑니다(나머지 설치에는 영향 없음).
+--  확인:  select jobname, schedule, active from cron.job;
+--  실행 기록:  select jobid, status, start_time from cron.job_run_details order by start_time desc limit 10;
+do $$ begin
+  begin
+    create extension if not exists pg_cron;
+  exception when others then
+    raise notice 'pg_cron 을 켜지 못했어요: %', sqlerrm;
+  end;
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    perform cron.schedule('ppeong-session-cleanup', '17 * * * *',
+      $job$delete from private.pk_sessions where started_at < now() - interval '2 days'$job$);
+  else
+    raise notice '세션 자동 삭제를 등록하지 못했어요 — Database → Extensions 에서 pg_cron 을 켠 뒤 이 파일을 다시 실행하세요';
   end if;
 end $$;
 

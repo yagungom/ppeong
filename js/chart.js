@@ -23,7 +23,7 @@ export function renderBoard(root, board, { myScore = null, myTeam = null, scopeL
       board.total === 1
         ? el('div', { class: 'pct first' }, el('b', { text: '🎉 첫 기록!' }))
         : el('div', { class: 'pct' }, el('span', { class: 'pct-label', text: board.my_rank === 1 ? '🏆 상위' : '상위' }), el('b', { text: `${pct}%` })),
-      el('div', { class: 'rank-line', text: `${scopeLabel} ${formatNum(board.total)}팀 중 ${formatNum(board.my_rank)}등` }),
+      el('div', { class: 'rank-line', text: `${scopeLabel} 기록 ${formatNum(board.total)}개 중 ${formatNum(board.my_rank)}등` }),
     );
   } else {
     head.append(el('div', { class: 'rank-line', text: `${scopeLabel} 기록 ${formatNum(board.total)}개 · 최고 ${formatNum(board.max)}점` }));
@@ -110,7 +110,7 @@ function histogram(board, myScore) {
     }
     const hit = svgEl('rect', { x: L + b * bw, y: T - 10, width: bw, height: B - T + 10, class: 'hit' });
     const show = () => {
-      tip.textContent = `${formatNum(b * step)}~${formatNum((b + 1) * step - 1)}점 · ${c}팀`;
+      tip.textContent = `${formatNum(b * step)}~${formatNum((b + 1) * step - 1)}점 · 기록 ${c}개`;
       tip.hidden = false;
       tip.style.left = `${((L + b * bw + bw / 2) / W) * 100}%`;
     };

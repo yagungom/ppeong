@@ -288,7 +288,7 @@ async function showResult(res) {
       const s = await sessionPromise;
       if (!s || s.err) throw s?.err || new Error('offline');
       const r = await online.submit(s.id, res);
-      if (r?.ok) { note.textContent = `${perfect}🎉 온라인 등록! 오늘 ${formatNum(r.day_total)}팀 중 ${formatNum(r.day_rank)}등`; note.classList.add('good'); }
+      if (r?.ok) { note.textContent = `${perfect}🎉 온라인 등록! 오늘 기록 ${formatNum(r.day_total)}개 중 ${formatNum(r.day_rank)}등`; note.classList.add('good'); }
       else note.textContent = `💾 이 기기에만 기록했어요 · ${errorText(r?.reason)}`;
     } catch (e) {
       note.textContent = `💾 이 기기에만 기록했어요 · ${errorText(e?.code || e?.message)}`;
@@ -382,7 +382,7 @@ $('#rank-back').addEventListener('click', () => show(rankState.from === 'result'
 $('#btn-help').addEventListener('click', () => show('help'));
 $('#help-back').addEventListener('click', () => show('title'));
 
-async function openSettings() {
+function openSettings() {
   $('#set-mirror').checked = settings.mirror;
   $('#set-sfx').checked = settings.sfx;
   $('#set-quality').value = settings.quality;
@@ -390,11 +390,18 @@ async function openSettings() {
   $('#set-online').textContent = online.enabled ? '켜짐 ✅' : '꺼짐 (config.js 설정 필요)';
   const sel = $('#set-camera');
   sel.replaceChildren(el('option', { value: '', text: settings.facing === 'user' ? '자동 (전면)' : '자동 (후면)' }));
+  sel.value = '';
+  show('settings'); // 설정 화면은 바로 열고, 카메라 목록은 받아오는 대로 채움 (목록 조회가 늦어도 화면이 멈추지 않게)
+  fillCameraSelect(sel);
+}
+let camListSeq = 0;
+async function fillCameraSelect(sel) {
+  const seq = ++camListSeq;
   const cams = (await CameraVision.listCameras()).filter((c) => c.deviceId);
+  if (seq !== camListSeq) return; // 그사이 설정을 다시 열었으면 예전 결과는 버림
   if (!cams.some((c) => c.label)) sel.append(el('option', { value: '', disabled: true, text: '카메라를 한 번 켜면 목록이 보여요' }));
   else cams.forEach((c, i) => sel.append(el('option', { value: c.deviceId, text: camName(c, i, cams) })));
   sel.value = cams.some((c) => c.deviceId === settings.cameraId) ? settings.cameraId : '';
-  show('settings');
 }
 $('#btn-settings').addEventListener('click', openSettings);
 $('#settings-back').addEventListener('click', () => show('title'));
